@@ -9,7 +9,7 @@
 :root[data-theme=light]{--bg:#f1f5f7;--card:#fff;--tx:#15222b;--mu:#586b78;--ac:#0d7d6c;--bd:#d5dfe5;--tut:#0d7d6c;--ex:#b97800;--us:#2f5fd0}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,sans-serif;padding:max(16px,env(safe-area-inset-top)) 16px 40px}
-main{max-width:980px;margin:auto}
+main{max-width:1200px;margin:auto}
 h1{font-size:1.7rem;margin:.2rem 0}h2{font-size:1.15rem;margin:2rem 0 .6rem}
 .mu{color:var(--mu)}small{color:var(--mu)}
 section,.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px}
@@ -38,6 +38,22 @@ a{color:var(--ac)}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--k);margin-right:6px}
 .cdc{border:1px solid var(--bd);border-left:5px solid var(--ac);border-radius:8px;padding:8px 12px}
 .cdc big{display:block;font-size:1.7rem;font-weight:700;line-height:1.2}
+details{margin-top:8px}summary{cursor:pointer;color:var(--ac)}
+.pl label{display:block;margin:8px 0;font-size:.85rem}
+.lay{display:grid;grid-template-columns:250px minmax(0,1fr);gap:16px;align-items:start}
+aside{position:sticky;top:10px}
+#cd .grid{grid-template-columns:1fr;gap:8px}
+.cdc{padding:6px 10px;font-size:.85rem}.cdc big{font-size:1.3rem}
+.mg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.mh{text-align:center;color:var(--mu);font-size:.8rem}
+.mc{min-height:96px;border:1px solid var(--bd);border-radius:6px;padding:3px;cursor:pointer;overflow:hidden}
+.mc.out{opacity:.4}.mc.hoy{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 16%,transparent)}
+.mc.sel{outline:2px solid var(--ac)}
+.n{font-size:.8rem;color:var(--mu)}
+.chip{color:#10161c;font-size:.7rem;border-radius:4px;padding:1px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.leg{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:.8rem;color:var(--mu)}
+#wl{text-transform:capitalize;font-weight:600;color:var(--tx)}
+@media(max-width:800px){.lay{grid-template-columns:1fr}aside{position:static}.mc{min-height:62px}.chip{font-size:.6rem}}
 .add{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 </style>
 </head>
@@ -56,16 +72,16 @@ a{color:var(--ac)}
   <div class="bar"><i id="pgb" style="width:0"></i></div>
 </section>
 
-<h2>Cuenta atrás</h2>
-<section id="cd"></section>
-
-<h2>Mi calendario</h2>
+<div class="lay"><aside><h2>Cuenta atrás</h2><div id="cd"></div></aside>
+<div class="cal"><h2>Mi calendario</h2>
 <section>
   <div class="nav">
-    <button id="pv">Semana anterior</button><button id="hy">Hoy</button><button id="nx">Semana siguiente</button>
+    <button id="pv">Mes anterior</button><button id="hy">Hoy</button><button id="nx">Mes siguiente</button>
     <span id="wl" class="mu"></span>
   </div>
-  <div class="week" id="week"></div>
+  <div class="mg" id="week"></div>
+  <div id="leg" class="leg"></div>
+  <div id="det" class="card" style="margin-top:10px"></div>
   <div class="add">
     <select id="ft"><option value="Práctica">Práctica</option><option value="Entrega">Entrega</option><option value="PEC">PEC</option><option value="Otro">Otro</option></select>
     <input id="fti" placeholder="Título" aria-label="Título">
@@ -77,7 +93,7 @@ a{color:var(--ac)}
   <p><small>Los eventos que añades se guardan en este navegador. Para llevarlos a otro PC, exporta e importa.</small></p>
   <button id="ex">Exportar eventos</button>
   <button id="im">Importar eventos</button><input id="imf" type="file" accept="application/json" hidden>
-</section>
+</section></div></div>
 
 <h2>Próximos</h2>
 <section id="next"></section>
@@ -188,6 +204,7 @@ function subj(){
     <p>${t?`Tutoría: ${t.a}, ${t.h}. ${nx?'Próxima: '+fmt(nx.d)+'.':'Sin sesiones próximas.'}`:'Curso virtual, sin tutoría presencial.'}</p>
     <a href="${s.nb}" target="_blank" rel="noopener">Abrir notebook de Gemini</a>
     ${t?` · <a href="${t.r}" target="_blank" rel="noopener">Sala online</a>`:''}
+    ${extra(s)}
     <p><label><input type="checkbox" data-ok="${s.id}" ${st.ok[s.id]?'checked':''}> Aprobada</label></p></div>`;
   }).join('');
   const n=S.filter(s=>st.ok[s.id]).length;
@@ -205,6 +222,24 @@ function cd(){
     return `<div class="cdc" style="border-left-color:${col(e.s)}"><big>${big}</big>${esc(nm)}<br><small>${fmt(e.d)}${e.h?' · '+e.h:''}${e.t!=='us'?' · '+e.x:''}</small></div>`;
   }).join('')+'</div>':'<span class="mu">No hay exámenes ni entregas próximos. Añade una práctica o entrega en el calendario.</span>';
 }
+const SH={fp:'Prog',al:'Álg',au:'Aut',ia:'IA'};
+const L=e=>e.t==='tut'?'T':e.t==='ex'?'E':e.t==='ent'?'P':(e.k==='Otro'?'•':'P');
+let sel=iso(new Date());
+function week(){
+  const now=new Date(),first=new Date(now.getFullYear(),now.getMonth()+off,1),m=first.getMonth();
+  const start=new Date(first.getFullYear(),m,1-((first.getDay()+6)%7)),ev=all(),hoy=iso(now);
+  let h=['L','M','X','J','V','S','D'].map(d=>`<div class="mh">${d}</div>`).join('');
+  for(let i=0;i<42;i++){
+    const d=new Date(start.getFullYear(),start.getMonth(),start.getDate()+i),k=iso(d);
+    h+=`<div class="mc${d.getMonth()!==m?' out':''}${k===hoy?' hoy':''}${k===sel?' sel':''}" data-d="${k}"><span class="n">${d.getDate()}</span>`+
+      ev.filter(e=>e.d===k).map(e=>`<div class="chip" style="background:${col(e.s)}" title="${esc(sn(e.s)+' · '+(e.t==='us'?e.tt:e.t==='tut'?'Tutoría':e.t==='ex'?'Examen':e.k))}">${L(e)} ${e.h||''} ${SH[e.s]||''}${e.t==='ent'?' '+e.k:''}${e.t==='us'?' '+esc(e.tt):''}</div>`).join('')+'</div>';
+  }
+  $('#week').innerHTML=h;
+  $('#wl').textContent=first.toLocaleDateString('es-ES',{month:'long',year:'numeric'});
+  $('#leg').innerHTML=S.map(s=>`<span><span class="dot" style="--k:${K[s.id]}"></span>${SH[s.id]}: ${s.n}</span>`).join('')+'<span><span class="dot" style="--k:var(--us)"></span>Personal</span><span>T tutoría · E examen · P práctica, PEC o entrega</span>';
+  const l=ev.filter(e=>e.d===sel);
+  $('#det').innerHTML='<b>'+fmt(sel)+'</b>'+(l.length?l.map(evHtml).join(''):'<br><span class="mu">Sin eventos este día.</span>');
+}
 function render(){week();next();subj();cd()}
 
 $('#fs').innerHTML='<option value="">Sin asignatura</option>'+S.map(s=>`<option value="${s.id}">${s.n}</option>`).join('');
@@ -218,21 +253,23 @@ $('#fa').onclick=()=>{
 document.addEventListener('click',e=>{
   const x=e.target.dataset;
   if(x.del!==undefined){st.ev.splice(+x.del,1);save();render()}
+  const c=e.target.closest('.mc');if(c&&c.dataset.d){sel=c.dataset.d;week()}
 });
 document.addEventListener('change',e=>{
+  if(e.target.dataset.pl!==undefined){st.pl=st.pl||{};st.pl[e.target.dataset.pl]=e.target.checked;save();return}
   if(e.target.dataset.ok){st.ok[e.target.dataset.ok]=e.target.checked;save();subj()}
 });
 $('#th').onclick=()=>{st.th=st.th==='dark'?'light':'dark';document.documentElement.dataset.theme=st.th;save()};
 $('#ex').onclick=()=>{
   const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([JSON.stringify({ev:st.ev,ok:st.ok},null,1)],{type:'application/json'}));
+  a.href=URL.createObjectURL(new Blob([JSON.stringify({ev:st.ev,ok:st.ok,pl:st.pl||{}},null,1)],{type:'application/json'}));
   a.download='panel-uned-datos.json';a.click();
 };
 $('#im').onclick=()=>$('#imf').click();
 $('#imf').onchange=e=>{
   const f=e.target.files[0];if(!f)return;
   f.text().then(t=>{
-    try{const j=JSON.parse(t);st.ev=j.ev||[];st.ok=j.ok||{};save();render()}
+    try{const j=JSON.parse(t);st.ev=j.ev||[];st.ok=j.ok||{};st.pl=j.pl||{};save();render()}
     catch(err){alert('El archivo no es válido. Importa un JSON exportado desde este panel.')}
   });
 };
