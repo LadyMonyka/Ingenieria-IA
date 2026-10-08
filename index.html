@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>UNED IA - Planificador</title>
+    <!-- App instalable (PWA) -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1e293b">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="UNED IA">
+    <link rel="icon" type="image/png" href="icon-192.png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        algebra: { 50: '#fefce8', 100: '#fef08a', 500: '#eab308', 600: '#ca8a04', 800: '#854d0e' },
+                        prog: { 50: '#f0fdf4', 100: '#bbf7d0', 500: '#22c55e', 600: '#16a34a', 800: '#166534' },
+                        ia: { 50: '#f0f9ff', 100: '#bae6fd', 200: '#7dd3fc', 500: '#0ea5e9', 600: '#0284c7', 800: '#075985' },
+                        aut: { 50: '#fff1f2', 100: '#fecdd3', 200: '#fda4af', 500: '#f43f5e', 600: '#e11d48', 800: '#9f1239' },
+                        uned: '#1e293b'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #0f172a; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* --- Calendario interactivo (vista de mes) --- */
+        .cal2-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+        .cal2-dow { font-size: 0.75rem; font-weight: 600; text-align: center; color: #3b6ea5; padding-bottom: 0.25rem; }
+        .cal2-cell {
+            min-height: 78px; background: #fff; border: 1px solid #d5dde6; border-radius: 6px;
+            padding: 3px 2px 3px; cursor: pointer; overflow: hidden; text-align: left;
+            transition: background-color .15s, border-color .15s; display: flex; flex-direction: column;
+        }
+        .cal2-cell:hover { background: #f1f5f9; }
+        .cal2-cell.other { opacity: .45; }
+        .cal2-cell.today { background: #e3f1ef; }
+        .cal2-cell.selected { border: 2px solid #0f766e; padding: 2px 1px 2px; }
+        .cal2-num { font-size: 0.75rem; color: #3b6ea5; padding-left: 3px; margin-bottom: 2px; }
+        .cal2-cell.today .cal2-num { font-weight: 800; color: #0f766e; }
+        .cal2-bar {
+            height: 14px; line-height: 14px; font-size: 9px; font-weight: 500; color: #111;
+            border-radius: 3px; padding: 0 3px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .cal2-bar.chip { height: 15px; line-height: 15px; }
+        .cal2-btn {
+            background: #eef3f8; border: 1px solid #c9d4df; border-radius: 6px; padding: 6px 10px;
+            font-size: 0.8rem; font-weight: 500; color: #1e293b; transition: background-color .15s, transform .1s;
+        }
+        .cal2-btn:hover { background: #e0e9f2; }
+        .cal2-btn:active { transform: scale(.96); }
+        @media (min-width: 1024px) {
+            .cal2-cell { min-height: 112px; }
+            .cal2-num { font-size: 0.85rem; }
+            .cal2-bar { font-size: 11px; height: 17px; line-height: 17px; }
+            .cal2-bar.chip { height: 18px; line-height: 18px; }
+        }
+        @media (min-width: 640px) {
+            .cal2-cell { min-height: 96px; }
+            .cal2-bar { font-size: 11px; height: 16px; line-height: 16px; }
+        }
+    </style>
+</head>
+<body class="pb-24">
+
+    <!-- Header -->
+    <header class="bg-uned text-white p-4 sticky top-0 z-30 shadow-md">
+        <div class="max-w-2xl mx-auto flex items-center justify-center space-x-2">
+            <i class="fa-solid fa-graduation-cap text-xl"></i>
+            <h1 class="text-lg font-bold">UNED IA Planificador</h1>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-6xl mx-auto p-4 md:p-6" id="main-content">
+        
+        <!-- VIEW: ASIGNATURAS -->
+        <section id="view-asignaturas" class="block fade-in">
+          <div class="grid gap-6 lg:grid-cols-[300px_minmax(0,640px)] lg:justify-center items-start">
+
+            <!-- Columna izquierda: entregas y cuentas atrás -->
+            <aside class="space-y-3">
+                <div id="deadlines"></div>
+                <div id="countdowns" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3"></div>
+            </aside>
+
+            <!-- Columna derecha: asignaturas -->
+            <div class="space-y-6">
+            <div class="mb-2">
+                <h2 class="text-2xl font-bold">Mis Asignaturas</h2>
+                <p class="text-slate-500 text-sm">Gestiona tu temario y genera simulacros.</p>
+            </div>
+
+            <div><h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">1º semestre · con tutorías</h3></div>
+
+            <!-- Subject 1: Álgebra (Yellow Theme) -->
+            <div class="bg-white border-l-4 border-algebra-500 rounded-2xl shadow-sm overflow-hidden">
+                <div class="p-5 bg-algebra-50 border-b border-algebra-100 flex justify-between items-start">
+                    <div>
+                        <h3 class="text-lg font-bold text-algebra-800">Fundamentos Algebraicos para la IA</h3>
+                        <p class="text-xs text-algebra-600 mt-1"><i class="fa-regular fa-calendar"></i> Tutoría: lunes 17:15 · Aula 18 (Las Tablas)</p>
+                    </div>
+                    <div class="bg-white p-2 rounded-lg shadow-sm">
+                        <i class="fa-solid fa-square-root-variable text-algebra-500 text-xl"></i>
+                    </div>
+                </div>
+                
+                <div class="p-5 space-y-4">
+                    <!-- Library / Upload Section for Algebra -->
+                    <div id="cardplan-algebra"></div>
+
+                    <div class="pt-2 space-y-2">
+                        <label class="block text-xs font-bold text-slate-600" for="temas-algebra"><i class="fa-solid fa-list-ol mr-1"></i>Temas del simulacro</label>
+                        <input id="temas-algebra" type="text" placeholder="Ej.: 1 y 2 (vacío = todos)" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400">
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="copySimulacro('algebra')" class="bg-algebra-500 hover:bg-algebra-600 text-white font-bold py-3 rounded-xl transition-transform active:scale-95 shadow-sm flex items-center justify-center space-x-2 text-sm">
+                                <i class="fa-regular fa-copy"></i>
+                                <span>Copiar prompt</span>
+                            </button>
+                            <a href="https://notebook.google.com/notebook/c5e8bb13-b243-44be-b0b0-a8743f1568c9" target="_blank" rel="noopener" class="bg-white border-2 border-algebra-500 text-algebra-800 hover:bg-algebra-50 font-bold py-3 rounded-xl transition-transform active:scale-95 flex items-center justify-center space-x-2 text-sm">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                <span>Abrir cuaderno</span>
+                            </a>
+                        </div>
+                        <p class="text-[11px] text-slate-400">1) Copia el prompt · 2) Abre el cuaderno de Gemini · 3) Pégalo en el chat.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Subject 2: Programación (Green Theme) -->
+            <div class="bg-white border-l-4 border-prog-500 rounded-2xl shadow-sm overflow-hidden">
+                <div class="p-5 bg-prog-50 border-b border-prog-100 flex justify-between items-start">
+                    <div>
+                        <h3 class="text-lg font-bold text-prog-800">Fundamentos de Programación</h3>
+                        <p class="text-xs text-prog-600 mt-1"><i class="fa-regular fa-calendar"></i> Tutoría: martes 17:15 · Aula 3 (Las Tablas)</p>
+                    </div>
+                    <div class="bg-white p-2 rounded-lg shadow-sm">
+                        <i class="fa-solid fa-code text-prog-500 text-xl"></i>
+                    </div>
+                </div>
+                
+                <div class="p-5 space-y-4">
+                    <!-- Library / Upload Section for Programming -->
+                    <div id="cardplan-prog"></div>
+
+                    <div class="pt-2 space-y-2">
+                        <label class="block text-xs font-bold text-slate-600" for="temas-prog"><i class="fa-solid fa-list-ol mr-1"></i>Temas del simulacro</label>
+                        <input id="temas-prog" type="text" placeholder="Ej.: 1 y 2 (vacío = todos)" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400">
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="copySimulacro('prog')" class="bg-prog-500 hover:bg-prog-600 text-white font-bold py-3 rounded-xl transition-transform active:scale-95 shadow-sm flex items-center justify-center space-x-2 text-sm">
+                                <i class="fa-regular fa-copy"></i>
+                                <span>Copiar prompt</span>
+                            </button>
+                            <a href="https://notebook.google.com/notebook/4b6366b2-b728-48a3-8047-60112be9b1d8" target="_blank" rel="noopener" class="bg-white border-2 border-prog-500 text-prog-800 hover:bg-prog-50 font-bold py-3 rounded-xl transition-transform active:scale-95 flex items-center justify-center space-x-2 text-sm">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                <span>Abrir cuaderno</span>
+                            </a>
+                        </div>
+                        <p class="text-[11px] text-slate-400">1) Copia el prompt · 2) Abre el cuaderno de Gemini · 3) Pégalo en el chat.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-2"><h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">2º semestre · curso virtual</h3></div>
+
+            <!-- Asignatura: Introducción a la Inteligencia Artificial -->
+            <div class="bg-white border-l-4 border-ia-500 rounded-2xl shadow-sm overflow-hidden">
+                <div class="p-5 bg-ia-50 border-b border-ia-100 flex justify-between items-start">
+                    <div class="pr-3">
+                        <h3 class="text-lg font-bold text-ia-800">Introducción a la Inteligencia Artificial</h3>
+                        <p class="text-xs text-ia-600 mt-1"><i class="fa-regular fa-calendar"></i> Examen test · PEC en abril</p>
+                    </div>
+                    <div class="bg-white p-2 rounded-lg shadow-sm">
+                        <i class="fa-solid fa-brain text-ia-500 text-xl"></i>
+                    </div>
+                </div>
+
+                <div class="p-5 space-y-4">
+                    <div id="cardplan-ia"></div>
+
+                    <div class="pt-2 space-y-2">
+                        <label class="block text-xs font-bold text-slate-600" for="temas-ia"><i class="fa-solid fa-list-ol mr-1"></i>Temas del simulacro</label>
+                        <input id="temas-ia" type="text" placeholder="Ej.: 1 y 2 (vacío = todos)" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400">
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="copySimulacro('ia')" class="bg-ia-500 hover:bg-ia-600 text-white font-bold py-3 rounded-xl transition-transform active:scale-95 shadow-sm flex items-center justify-center space-x-2 text-sm">
+                                <i class="fa-regular fa-copy"></i>
+                                <span>Copiar prompt</span>
+                            </button>
+                            <a href="https://notebook.google.com/notebook/a47d00a8-ed70-4445-9f6e-551c358d037b" target="_blank" rel="noopener" class="bg-white border-2 border-ia-500 text-ia-800 hover:bg-ia-50 font-bold py-3 rounded-xl transition-transform active:scale-95 flex items-center justify-center space-x-2 text-sm">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                <span>Abrir cuaderno</span>
+                            </a>
+                        </div>
+                        <p class="text-[11px] text-slate-400">1) Copia el prompt · 2) Abre el cuaderno de Gemini · 3) Pégalo en el chat.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Asignatura: Fundamentos de Autómatas, Gramáticas y Lenguajes -->
+            <div class="bg-white border-l-4 border-aut-500 rounded-2xl shadow-sm overflow-hidden">
+                <div class="p-5 bg-aut-50 border-b border-aut-100 flex justify-between items-start">
+                    <div class="pr-3">
+                        <h3 class="text-lg font-bold text-aut-800">Fundamentos de Autómatas, Gramáticas y Lenguajes</h3>
+                        <p class="text-xs text-aut-600 mt-1"><i class="fa-regular fa-calendar"></i> Examen test · Práctica en mayo</p>
+                    </div>
+                    <div class="bg-white p-2 rounded-lg shadow-sm">
+                        <i class="fa-solid fa-diagram-project text-aut-500 text-xl"></i>
+                    </div>
+                </div>
+
+                <div class="p-5 space-y-4">
+                    <div id="cardplan-aut"></div>
+
+                    <div class="pt-2 space-y-2">
+                        <label class="block text-xs font-bold text-slate-600" for="temas-aut"><i class="fa-solid fa-list-ol mr-1"></i>Temas del simulacro</label>
+                        <input id="temas-aut" type="text" placeholder="Ej.: 1 y 2 (vacío = todos)" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-slate-400">
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="copySimulacro('aut')" class="bg-aut-500 hover:bg-aut-600 text-white font-bold py-3 rounded-xl transition-transform active:scale-95 shadow-sm flex items-center justify-center space-x-2 text-sm">
+                                <i class="fa-regular fa-copy"></i>
+                                <span>Copiar prompt</span>
+                            </button>
+                            <a href="https://notebook.google.com/notebook/8e5f4ee6-b05e-49b7-b5e6-1404c7f39647" target="_blank" rel="noopener" class="bg-white border-2 border-aut-500 text-aut-800 hover:bg-aut-50 font-bold py-3 rounded-xl transition-transform active:scale-95 flex items-center justify-center space-x-2 text-sm">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                <span>Abrir cuaderno</span>
+                            </a>
+                        </div>
+                        <p class="text-[11px] text-slate-400">1) Copia el prompt · 2) Abre el cuaderno de Gemini · 3) Pégalo en el chat.</p>
+                    </div>
+                </div>
+            </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW: CALENDARIO -->
+        <section id="view-calendario" class="space-y-6 hidden fade-in">
+            <div class="mb-2">
+                <h2 class="text-2xl font-bold">Calendario</h2>
+                <p class="text-slate-500 text-sm">Planificación y entregas. Toca un día para abrir su detalle.</p>
+            </div>
+
+            <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] items-start">
+            <!-- Calendar Widget -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-3">
+                <!-- Controls -->
+                <div class="flex flex-wrap items-center gap-2 mb-3">
+                    <button class="cal2-btn" onclick="changeMonth(-1)"><i class="fa-solid fa-chevron-left text-[10px] mr-1"></i>Mes anterior</button>
+                    <button class="cal2-btn" onclick="goToday()">Hoy</button>
+                    <button class="cal2-btn" onclick="changeMonth(1)">Mes siguiente<i class="fa-solid fa-chevron-right text-[10px] ml-1"></i></button>
+                    <span id="cal-title" class="font-bold text-sm text-uned ml-1"></span>
+                </div>
+
+                <!-- Days of week -->
+                <div class="cal2-grid mb-1">
+                    <div class="cal2-dow">L</div><div class="cal2-dow">M</div><div class="cal2-dow">X</div>
+                    <div class="cal2-dow">J</div><div class="cal2-dow">V</div>
+                    <div class="cal2-dow text-rose-500" style="color:#f43f5e">S</div>
+                    <div class="cal2-dow text-rose-500" style="color:#f43f5e">D</div>
+                </div>
+                <!-- Calendar Grid (Generated via JS) -->
+                <div id="calendar-grid" class="cal2-grid"></div>
+
+                <!-- Legend -->
+                <div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 mt-4 pt-4 border-t border-slate-100 text-[10px] font-medium text-slate-500">
+                    <div class="flex items-center"><span class="w-2 h-2 rounded-full mr-1" style="background:#b388ff"></span> Tutoría Álgebra</div>
+                    <div class="flex items-center"><span class="w-2 h-2 rounded-full mr-1" style="background:#4fc3b0"></span> Tutoría Programación</div>
+                    <div class="flex items-center"><span class="w-2 h-2 rounded-full bg-algebra-500 mr-1"></span> Álgebra</div>
+                    <div class="flex items-center"><span class="w-2 h-2 rounded-full bg-prog-500 mr-1"></span> Programación</div>
+                    <div class="flex items-center"><span class="w-2 h-2 rounded-full bg-ia-500 mr-1"></span> Intro. IA</div>
+                    <div class="flex items-center"><span class="w-2 h-2 rounded-full bg-aut-500 mr-1"></span> Autómatas</div>
+                    <div class="flex items-center"><span class="w-2 h-2 rounded-full bg-slate-400 mr-1"></span> General</div>
+                </div>
+            </div>
+
+            <!-- Agenda List -->
+            <div class="lg:sticky lg:top-20 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto hide-scrollbar">
+                <h3 id="agenda-title" class="font-bold text-lg mb-3">Agenda del mes</h3>
+                <div id="agenda-list" class="space-y-3">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+            </div>
+        </section>
+
+        <!-- VIEW: HOY -->
+        <section id="view-hoy" class="space-y-6 hidden fade-in">
+            <div class="mb-2">
+                <h2 class="text-2xl font-bold">Hoy</h2>
+                <p id="hoy-date" class="text-slate-500 text-sm"></p>
+            </div>
+            <div id="hoy-content" class="space-y-6"></div>
+        </section>
+
+    </main>
+
+    <!-- Popup de detalle del día -->
+    <div id="day-modal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4" onclick="if (event.target === this) closeDayModal()">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] overflow-y-auto relative">
+            <button onclick="closeDayModal()" aria-label="Cerrar" class="absolute top-3 right-3 w-8 h-8 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center z-10"><i class="fa-solid fa-xmark"></i></button>
+            <div id="day-detail" class="p-5"></div>
+        </div>
+    </div>
+
+    <!-- Custom Modal (Replaces alerts) -->
+    <div id="custom-modal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity opacity-0">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden transform scale-95 transition-transform" id="custom-modal-content">
+            <div class="p-6 text-center">
+                <div id="modal-icon" class="mx-auto w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-3xl mb-4">
+                    <i class="fa-solid fa-info-circle"></i>
+                </div>
+                <h3 id="modal-title" class="text-xl font-bold text-slate-800 mb-2"></h3>
+                <p id="modal-message" class="text-slate-500 text-sm leading-relaxed"></p>
+            </div>
+            <div class="bg-slate-50 p-4 border-t border-slate-100">
+                <button onclick="closeModal()" class="w-full bg-uned text-white font-bold py-2.5 rounded-xl hover:bg-slate-800 transition">Entendido</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="fixed bottom-0 w-full bg-white border-t border-slate-200 pb-safe shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-40">
+        <div class="max-w-2xl mx-auto flex">
+            <button onclick="switchView('asignaturas', this)" class="nav-btn flex-1 py-4 flex flex-col items-center justify-center text-uned font-bold transition-colors">
+                <i class="fa-solid fa-layer-group text-xl mb-1"></i>
+                <span class="text-[11px] uppercase tracking-wide">Asignaturas</span>
+            </button>
+            <button onclick="switchView('calendario', this)" class="nav-btn flex-1 py-4 flex flex-col items-center justify-center text-slate-400 hover:text-slate-600 transition-colors">
+                <i class="fa-solid fa-calendar-days text-xl mb-1"></i>
+                <span class="text-[11px] uppercase tracking-wide">Calendario</span>
+            </button>
+            <button onclick="switchView('hoy', this)" class="nav-btn flex-1 py-4 flex flex-col items-center justify-center text-slate-400 hover:text-slate-600 transition-colors">
+                <i class="fa-solid fa-bullseye text-xl mb-1"></i>
+                <span class="text-[11px] uppercase tracking-wide">Hoy</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Scripts -->
+    <script>
+        // --- Data Definitions ---
+
+        // Eventos puntuales (exámenes)
+        const events = [
+            // 1º semestre: enero/febrero; 2º semestre: mayo/junio (calendario provisional)
+            { date: '2027-01-26', title: "Examen Programación · 16:00", type: "exam", subject: "prog" },
+            { date: '2027-01-27', title: "Examen Álgebra · 16:00", type: "exam", subject: "algebra" },
+            { date: '2027-02-09', title: "Examen Programación (2ª sem.) · 09:00", type: "exam", subject: "prog" },
+            { date: '2027-02-10', title: "Examen Álgebra (2ª sem.) · 09:00", type: "exam", subject: "algebra" },
+            { date: '2027-05-24', title: "Examen Autómatas · 16:00", type: "exam", subject: "aut" },
+            { date: '2027-05-26', title: "Examen Intro. IA · 16:00", type: "exam", subject: "ia" },
+            { date: '2027-06-07', title: "Examen Autómatas (2ª sem.) · 09:00", type: "exam", subject: "aut" },
+            { date: '2027-06-09', title: "Examen Intro. IA (2ª sem.) · 09:00", type: "exam", subject: "ia" },
+            // Entregas
+            { date: '2026-10-15', title: "Entrega Práctica 1 Programación", type: "pec", subject: "prog" },
+            { date: '2026-10-29', title: "Entrega Práctica 2 Programación", type: "pec", subject: "prog" },
+            { date: '2026-11-20', title: "Entrega Práctica 3 Programación", type: "pec", subject: "prog" },
+            { date: '2026-12-11', title: "PEC Álgebra (test)", type: "pec", subject: "algebra" },
+            { date: '2026-12-12', title: "PEC Álgebra (test)", type: "pec", subject: "algebra" },
+            { date: '2026-12-13', title: "PEC Álgebra (test)", type: "pec", subject: "algebra" },
+            { date: '2026-12-14', title: "PEC Álgebra (test)", type: "pec", subject: "algebra" },
+            { date: '2027-01-12', title: "Práctica Python Álgebra", type: "pec", subject: "algebra" },
+            { date: '2027-01-20', title: "Fin entrega autocorregidas Prog.", type: "pec", subject: "prog" },
+            { date: '2027-01-22', title: "Entrega Práctica 4 Programación (tutor)", type: "pec", subject: "prog" }
+        ];
+
+        // Entregas con fecha cerrada, para la cuenta atrás de la página principal
+        const deadlines = [
+            { label: 'Práctica 1',                     subject: 'prog',    date: '2026-10-15' },
+            { label: 'Práctica 2',                     subject: 'prog',    date: '2026-10-29' },
+            { label: 'Práctica 3',                     subject: 'prog',    date: '2026-11-20' },
+            { label: 'PEC test (plazo 11-14 dic)',     subject: 'algebra', date: '2026-12-14' },
+            { label: 'Práctica de Python',             subject: 'algebra', date: '2027-01-12' },
+            { label: 'Fin de prácticas autocorregidas', subject: 'prog',   date: '2027-01-20' },
+            { label: 'Práctica 4 (la evalúa el tutor)', subject: 'prog',   date: '2027-01-22' }
+        ];
+
+        // Fases del cronograma de Álgebra (rangos de fechas, ambos incluidos)
+        const phases = [
+            { start: '2026-10-01', end: '2026-10-04', label: 'Álg · Arrancando', color: '#e53935' },
+            { start: '2026-10-05', end: '2026-10-11', label: 'Álg · Tema 1',     color: '#f08a3c' },
+            { start: '2026-10-12', end: '2026-11-01', label: 'Álg · Tema 2',     color: '#f4d84a' },
+            { start: '2026-11-02', end: '2026-11-22', label: 'Álg · Tema 3',     color: '#d5e8bd' },
+            { start: '2026-11-23', end: '2026-12-06', label: 'Álg · Tema 4',     color: '#9fd3e8' },
+            { start: '2026-12-07', end: '2026-12-20', label: 'Álg · Tema 5',     color: '#f4b6cf' },
+            { start: '2027-01-11', end: '2027-01-17', label: 'Álg · Tema 5',     color: '#f4b6cf' },
+            { start: '2027-01-18', end: '2027-01-24', label: 'Álg · Repaso',     color: '#cfd8dc' }
+        ];
+
+        // Tutorías (17:15, 90 min, Las Tablas)
+        const tutorias = [
+            { subject: 'algebra', short: 'T 17:15 Álg',  color: '#b388ff',
+              full: 'Tutoría Fundamentos Algebraicos · 17:15 · Aula 18 (Las Tablas)',
+              dates: ['2026-10-05','2026-10-19','2026-10-26','2026-11-16','2026-11-23','2026-11-30','2026-12-14','2027-01-11','2027-01-18'] },
+            { subject: 'prog',    short: 'T 17:15 Prog', color: '#4fc3b0',
+              full: 'Tutoría Fundamentos de Programación · 17:15 · Aula 3 (Las Tablas)',
+              dates: ['2026-10-06','2026-10-13','2026-10-20','2026-10-27','2026-11-03','2026-11-10','2026-11-17','2026-11-24','2026-12-01','2026-12-15','2027-01-12','2027-01-19'] }
+        ];
+
+        // Notas del usuario (se guardan en el navegador)
+        const NOTES_KEY = 'uned-ia-notas-v1';
+        let notes = [];
+        try { notes = JSON.parse(localStorage.getItem(NOTES_KEY) || '[]'); } catch (e) { notes = []; }
+        function saveNotes() {
+            try { localStorage.setItem(NOTES_KEY, JSON.stringify(notes)); } catch (e) { /* sin almacenamiento */ }
+        }
+
+        // Entregas marcadas como hechas (clave: asignatura|fecha), se guardan en el navegador
+        const DEAD_KEY = 'uned-ia-entregas-v1';
+        let deadDone = {};
+        try { deadDone = JSON.parse(localStorage.getItem(DEAD_KEY) || '{}'); } catch (e) { deadDone = {}; }
+
+        // Enlaces a grabaciones de tutorías (clave: asignatura|fecha), se guardan en el navegador
+        const REC_KEY = 'uned-ia-grabaciones-v1';
+        let recLinks = {};
+        try { recLinks = JSON.parse(localStorage.getItem(REC_KEY) || '{}'); } catch (e) { recLinks = {}; }
+        function saveRecLinks() {
+            try { localStorage.setItem(REC_KEY, JSON.stringify(recLinks)); } catch (e) { /* sin almacenamiento */ }
+        }
+
+        // Tutorías con grabación disponible
+        const recordings = ['algebra|2026-10-05'];
+
+        const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+        const pad = n => String(n).padStart(2, '0');
+        const keyOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const SUBJECT_STYLE = {
+            algebra: { bg: '#fef08a', fg: '#854d0e' },
+            prog:    { bg: '#bbf7d0', fg: '#166534' },
+            ia:      { bg: '#bae6fd', fg: '#075985' },
+            aut:     { bg: '#fecdd3', fg: '#9f1239' },
+            general: { bg: '#e2e8f0', fg: '#334155' }
+        };
+
+        // --- Calendar state ---
+        const now = new Date();
+        const todayKey = keyOf(now);
+        let viewYear = now.getFullYear();
+        let viewMonth = now.getMonth();
+        let selectedKey = todayKey;
+
+        // --- Navigation Logic ---
+        function switchView(viewId, btnElement) {
+            // Hide all views
+            ['asignaturas', 'calendario', 'hoy'].forEach(v => document.getElementById('view-' + v).classList.add('hidden'));
+            
+            // Show selected
+            document.getElementById('view-' + viewId).classList.remove('hidden');
+            
+            // Reset nav buttons
+            const navBtns = document.querySelectorAll('.nav-btn');
+            navBtns.forEach(btn => {
+                btn.classList.remove('text-uned', 'font-bold');
+                btn.classList.add('text-slate-400');
+            });
+            
+            // Activate current nav button
+            btnElement.classList.remove('text-slate-400');
+            btnElement.classList.add('text-uned', 'font-bold');
+            
+            // If switching to calendar, ensure it's rendered
+            if (viewId === 'calendario') {
+                renderCalendar();
+            }
+            if (viewId === 'hoy') {
+                renderHoy();
+            }
+        }
+
+        // --- Modal Logic ---
+        function showModal(title, message, type = 'info') {
+            const modal = document.getElementById('custom-modal');
+            const content = document.getElementById('custom-modal-content');
+            const icon = document.getElementById('modal-icon');
+            
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-message').innerText = message;
+            
+            if (type === 'algebra') {
+                icon.className = "mx-auto w-16 h-16 bg-algebra-100 text-algebra-600 rounded-full flex items-center justify-center text-3xl mb-4";
+                icon.innerHTML = '<i class="fa-solid fa-square-root-variable"></i>';
+            } else if (type === 'prog') {
+                icon.className = "mx-auto w-16 h-16 bg-prog-100 text-prog-600 rounded-full flex items-center justify-center text-3xl mb-4";
+                icon.innerHTML = '<i class="fa-solid fa-code"></i>';
+            } else if (type === 'ia') {
+                icon.className = "mx-auto w-16 h-16 bg-ia-100 text-ia-600 rounded-full flex items-center justify-center text-3xl mb-4";
+                icon.innerHTML = '<i class="fa-solid fa-brain"></i>';
+            } else if (type === 'aut') {
+                icon.className = "mx-auto w-16 h-16 bg-aut-100 text-aut-600 rounded-full flex items-center justify-center text-3xl mb-4";
+                icon.innerHTML = '<i class="fa-solid fa-diagram-project"></i>';
+            } else {
+                icon.className = "mx-auto w-16 h-16 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center text-3xl mb-4";
+                icon.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
+            }
+
+            modal.classList.remove('hidden');
+            // Trigger reflow for transition
+            void modal.offsetWidth; 
+            modal.classList.remove('opacity-0');
+            content.classList.remove('scale-95');
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('custom-modal');
+            const content = document.getElementById('custom-modal-content');
+            
+            modal.classList.add('opacity-0');
+            content.classList.add('scale-95');
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300); // Matches transition duration
+        }
+
+        // --- Calendar helpers ---
+        function phasesOn(key) { return phases.filter(p => key >= p.start && key <= p.end); }
+        function tutoriasOn(key) {
+            return tutorias.filter(t => t.dates.includes(key))
+                           .map(t => ({ ...t, recorded: !!recLinks[t.subject + '|' + key] || (recordings.includes(t.subject + '|' + key) && key < todayKey) }));
+        }
+        function eventsOn(key) { return events.concat(notes).filter(e => e.date === key); }
+
+        function changeMonth(delta) {
+            viewMonth += delta;
+            if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+            if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+            renderCalendar();
+        }
+
+        function goToday() {
+            viewYear = now.getFullYear();
+            viewMonth = now.getMonth();
+            selectedKey = todayKey;
+            renderCalendar();
+        }
+
+        function selectDay(key) {
+            selectedKey = key;
+            const d = parseKey(key);
+            // Si se toca un día de otro mes, se salta a ese mes
+            if (d.getMonth() !== viewMonth || d.getFullYear() !== viewYear) {
+                viewMonth = d.getMonth();
+                viewYear = d.getFullYear();
+            }
+            renderCalendar();
+            openDayModal();
+        }
+
+        function openDayModal() {
+            document.getElementById('day-modal').classList.remove('hidden');
+        }
+
+        function closeDayModal() {
+            document.getElementById('day-modal').classList.add('hidden');
+        }
+
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDayModal(); });
+
+        function parseKey(key) {
+            const [y, m, d] = key.split('-').map(Number);
+            return new Date(y, m - 1, d);
+        }
+
+        // --- Calendar Rendering Logic ---
+        function renderCalendar() {
+            const grid = document.getElementById('calendar-grid');
+            document.getElementById('cal-title').innerText = `${MONTHS[viewMonth]} de ${viewYear}`;
+
+            const first = new Date(viewYear, viewMonth, 1);
+            const offset = (first.getDay() + 6) % 7; // lunes = 0
+            const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+            const weeks = Math.ceil((offset + daysInMonth) / 7);
+
+            let html = '';
+            for (let i = 0; i < weeks * 7; i++) {
+                const d = new Date(viewYear, viewMonth, 1 - offset + i);
+                const key = keyOf(d);
+                const isMonday = d.getDay() === 1;
+                const classes = ['cal2-cell'];
+                if (d.getMonth() !== viewMonth) classes.push('other');
+                if (key === todayKey) classes.push('today');
+                if (key === selectedKey) classes.push('selected');
+
+                let bars = '';
+                // Fases: barra continua; la etiqueta aparece al inicio de la fase y cada lunes
+                phasesOn(key).forEach(p => {
+                    const showLabel = key === p.start || isMonday;
+                    bars += `<div class="cal2-bar" style="background:${p.color}">${showLabel ? p.label : '&nbsp;'}</div>`;
+                });
+                // Tutorías
+                tutoriasOn(key).forEach(t => {
+                    bars += `<div class="cal2-bar chip" style="background:${t.color}">${t.short}${t.recorded ? ' ▶' : ''}</div>`;
+                });
+                // Eventos puntuales
+                eventsOn(key).forEach(e => {
+                    const s = SUBJECT_STYLE[e.subject] || SUBJECT_STYLE.general;
+                    bars += `<div class="cal2-bar chip" style="background:${s.bg};color:${s.fg};border-left:3px solid ${s.fg}">${esc(e.title)}</div>`;
+                });
+
+                html += `<div class="${classes.join(' ')}" onclick="selectDay('${key}')">
+                            <span class="cal2-num">${d.getDate()}</span>${bars}
+                         </div>`;
+            }
+            grid.innerHTML = html;
+
+            renderDayDetail();
+            renderAgenda();
+        }
+
+        function renderDayDetail() {
+            const box = document.getElementById('day-detail');
+            const d = parseKey(selectedKey);
+            let title = d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+            title = title.charAt(0).toUpperCase() + title.slice(1);
+
+            const items = [];
+            phasesOn(selectedKey).forEach(p => {
+                items.push(`<div class="flex items-start space-x-3">
+                    <span class="mt-1 w-3 h-3 rounded flex-shrink-0" style="background:${p.color}"></span>
+                    <div><p class="text-sm font-semibold text-slate-800">${p.label}</p>
+                    <p class="text-xs text-slate-500">${fmtShort(p.start)} – ${fmtShort(p.end)}</p></div></div>`);
+            });
+            tutoriasOn(selectedKey).forEach(t => {
+                const rk = t.subject + '|' + selectedKey;
+                const link = recLinks[rk];
+                const rec = link
+                    ? `<div class="mt-2 flex items-center gap-2">
+                           <a href="${esc(link)}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg text-white" style="background:${t.color}"><i class="fa-solid fa-play"></i> Ver grabación</a>
+                           <button class="text-slate-400 hover:text-red-500 p-1" title="Quitar enlace" onclick="removeRecording('${rk}')"><i class="fa-solid fa-trash"></i></button>
+                       </div>`
+                    : `<div class="mt-2 flex items-center gap-2">
+                           <input id="rec-${t.subject}" type="url" inputmode="url" placeholder="Pega el enlace de la grabación" class="flex-1 min-w-0 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-slate-400">
+                           <button onclick="saveRecording('${rk}', 'rec-${t.subject}')" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-uned text-white whitespace-nowrap"><i class="fa-solid fa-link mr-1"></i>Guardar</button>
+                       </div>`;
+                items.push(`<div class="flex items-start space-x-3">
+                    <span class="mt-1 w-3 h-3 rounded flex-shrink-0" style="background:${t.color}"></span>
+                    <div class="flex-1 min-w-0"><p class="text-sm font-semibold text-slate-800">${t.full}</p>
+                    <p class="text-xs text-slate-500">${t.recorded ? '<i class="fa-solid fa-play mr-1"></i>Grabación disponible' : 'Presencial + TEAMS · 90 min'}</p>
+                    ${rec}</div></div>`);
+            });
+            eventsOn(selectedKey).forEach(e => {
+                const s = SUBJECT_STYLE[e.subject] || SUBJECT_STYLE.general;
+                items.push(`<div class="flex items-start space-x-3">
+                    <span class="mt-1 w-3 h-3 rounded flex-shrink-0" style="background:${s.bg};border:1px solid ${s.fg}"></span>
+                    <div class="flex-1"><p class="text-sm font-semibold text-slate-800 break-words">${esc(e.title)}</p>
+                    <p class="text-xs text-slate-500">${e.type === 'exam' ? 'Examen' : e.type === 'note' ? 'Nota' : (e.type === 'pec' ? 'Entrega evaluada' : (e.type === 'study' ? 'Bloque de estudio' : 'Evento'))}</p></div>
+                    ${e.type === 'note' ? `<button class="text-slate-400 hover:text-red-500 p-1" title="Borrar nota" onclick="deleteNote('${e.id}')"><i class="fa-solid fa-trash"></i></button>` : ''}</div>`);
+            });
+
+            box.innerHTML = `
+                <h3 class="font-bold text-base mb-3 text-uned pr-8"><i class="fa-regular fa-calendar-check text-slate-400 mr-2"></i>${title}</h3>
+                ${items.length ? `<div class="space-y-3">${items.join('')}</div>` : '<p class="text-sm text-slate-400">Sin eventos este día.</p>'}
+                <div class="mt-4 pt-4 border-t border-slate-100">
+                    <p class="text-xs font-bold text-slate-500 mb-2"><i class="fa-solid fa-pen mr-1"></i>Añadir nota a este día</p>
+                    <textarea id="note-text" rows="2" maxlength="300" placeholder="Ej.: leer hasta la mitad del tema 2 antes de la tutoría"
+                        class="w-full border border-slate-200 rounded-lg p-2 text-sm focus:outline-none focus:border-teal-600 resize-none"></textarea>
+                    <div class="flex items-center gap-2 mt-2">
+                        <select id="note-subject" class="border border-slate-200 rounded-lg px-2 py-2 text-sm bg-white">
+                            <option value="algebra">Álgebra</option>
+                            <option value="prog">Programación</option>
+                            <option value="ia">Intro. a la IA</option>
+                            <option value="aut">Autómatas</option>
+                            <option value="general">General</option>
+                        </select>
+                        <button onclick="addNote()" class="flex-1 bg-uned hover:bg-slate-800 text-white text-sm font-bold py-2 rounded-lg transition-transform active:scale-95">
+                            <i class="fa-solid fa-plus mr-1"></i>Añadir
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- Plan de trabajo ---
+        const PLAN_KEY = 'uned-ia-plan-v1';
+        let planDone = {};
+        try { planDone = JSON.parse(localStorage.getItem(PLAN_KEY) || '{}'); } catch (e) { planDone = {}; }
+
+        const planData = [
+            {
+                id: 'alg', title: 'Fundamentos Algebraicos para la IA', icon: 'fa-square-root-variable',
+                info: 'Examen: miércoles 27 ene 2027, 16:00 (2ª semana: miércoles 10 feb, 09:00). PEC test en diciembre (temas 1-4) y práctica de Python en enero.',
+                t: { head: 'bg-algebra-50 border-algebra-100', title: 'text-algebra-800', sub: 'text-algebra-600', bar: 'bg-algebra-500',
+                     card: 'border-algebra-500', badge: 'bg-algebra-100 text-algebra-800', iconc: 'text-algebra-500', check: 'bg-algebra-500 border-algebra-500', cur: 'border-algebra-500' },
+                items: [
+                    { id: 'alg-0',  label: 'Arrancando',                s: '2026-10-01', e: '2026-10-04' },
+                    { id: 'alg-1',  label: 'Tema 1',                    s: '2026-10-05', e: '2026-10-11' },
+                    { id: 'alg-2',  label: 'Tema 2',                    s: '2026-10-12', e: '2026-11-01' },
+                    { id: 'alg-3',  label: 'Tema 3',                    s: '2026-11-02', e: '2026-11-22' },
+                    { id: 'alg-4',  label: 'Tema 4',                    s: '2026-11-23', e: '2026-12-06' },
+                    { id: 'alg-5a', label: 'Tema 5 (1ª parte)',         s: '2026-12-07', e: '2026-12-20' },
+                    { id: 'alg-pec',label: 'PEC (test, temas 1-4)',     s: '2026-12-11', e: '2026-12-14', milestone: true },
+                    { id: 'alg-5b', label: 'Tema 5 (continuación)',     s: '2027-01-11', e: '2027-01-17' },
+                    { id: 'alg-pr', label: 'Práctica de Python',        s: '2027-01-12', e: '2027-01-12', milestone: true },
+                    { id: 'alg-rep',label: 'Repaso',                    s: '2027-01-18', e: '2027-01-24' }
+                ]
+            },
+            {
+                id: 'prg', title: 'Fundamentos de Programación', icon: 'fa-code',
+                info: 'Examen: martes 26 ene 2027, 16:00 (2ª semana: martes 9 feb, 09:00). Plan de 12 bloques semanales de 12 h (el último de 16 h) en 3 unidades didácticas, con 4 prácticas.',
+                t: { head: 'bg-prog-50 border-prog-100', title: 'text-prog-800', sub: 'text-prog-600', bar: 'bg-prog-500',
+                     card: 'border-prog-500', badge: 'bg-prog-100 text-prog-800', iconc: 'text-prog-500', check: 'bg-prog-500 border-prog-500', cur: 'border-prog-500' },
+                items: [
+                    { id: 'prg-t1',  label: 'Temas 1-3',                 s: '2026-10-01', e: '2026-10-15' },
+                    { id: 'prg-p1',  label: 'Práctica 1',                s: '2026-10-15', e: '2026-10-15', milestone: true },
+                    { id: 'prg-t4',  label: 'Temas 4-6',                 s: '2026-10-16', e: '2026-10-29' },
+                    { id: 'prg-p2',  label: 'Práctica 2',                s: '2026-10-29', e: '2026-10-29', milestone: true },
+                    { id: 'prg-t7',  label: 'Temas 7-10',                s: '2026-11-02', e: '2026-11-20' },
+                    { id: 'prg-p3',  label: 'Práctica 3',                s: '2026-11-20', e: '2026-11-20', milestone: true },
+                    { id: 'prg-t11', label: 'Tema 11',                   s: '2026-11-23', e: '2026-11-27' },
+                    { id: 'prg-t12', label: 'Temas 12-14',               s: '2026-11-30', e: '2026-12-18' },
+                    { id: 'prg-t15', label: 'Tema 15',                   s: '2026-12-21', e: '2026-12-25' },
+                    { id: 'prg-p4',  label: 'Práctica 4 (la evalúa el tutor)', s: '2026-12-28', e: '2027-01-22', milestone: true },
+                    { id: 'prg-rep', label: 'Repaso',                    s: '2027-01-06', e: '2027-01-22' },
+                    { id: 'prg-auto',label: 'Entrega de prácticas autocorregidas', s: '2026-11-09', e: '2027-01-20', milestone: true }
+                ]
+            },
+            {
+                id: 'ia', title: 'Introducción a la Inteligencia Artificial', icon: 'fa-brain',
+                info: 'Examen test de unas 30 preguntas (80 %; acierto 10/n, error resta 5/n). Exámenes: miércoles 26 may 2027 a las 16:00 y 2ª semana miércoles 9 jun a las 09:00 (calendario provisional). Hace falta al menos un 5 en el examen para que sumen la PEC y la actividad.',
+                t: { head: 'bg-ia-50 border-ia-100', title: 'text-ia-800', sub: 'text-ia-600', bar: 'bg-ia-500',
+                     card: 'border-ia-500', badge: 'bg-ia-100 text-ia-800', iconc: 'text-ia-500', check: 'bg-ia-500 border-ia-500', cur: 'border-ia-500' },
+                items: [
+                    { id: 'ia-pec',  label: 'PEC «Búsqueda en un espacio de estados» (10 %)', s: '2027-04-01', e: '2027-04-10', milestone: true, approx: 'primeros de abril' },
+                    { id: 'ia-prol', label: 'Actividad «Sistema basado en reglas en Prolog» (10 %)', s: '2027-05-01', e: '2027-05-10', milestone: true, approx: 'primeros de mayo' },
+                    { id: 'ia-ex1',  label: 'Examen (1ª semana, 16:00)', s: '2027-05-26', e: '2027-05-26', milestone: true },
+                    { id: 'ia-ex2',  label: 'Examen (2ª semana, 09:00)', s: '2027-06-09', e: '2027-06-09', milestone: true }
+                ]
+            },
+            {
+                id: 'aut', title: 'Fundamentos de Autómatas, Gramáticas y Lenguajes', icon: 'fa-diagram-project',
+                info: 'Examen test de 10 preguntas (90 %); sin PEC. Exámenes: lunes 24 may 2027 a las 16:00 y 2ª semana lunes 7 jun a las 09:00 (calendario provisional). Hace falta al menos un 5 en el examen para que cuente la práctica.',
+                t: { head: 'bg-aut-50 border-aut-100', title: 'text-aut-800', sub: 'text-aut-600', bar: 'bg-aut-500',
+                     card: 'border-aut-500', badge: 'bg-aut-100 text-aut-800', iconc: 'text-aut-500', check: 'bg-aut-500 border-aut-500', cur: 'border-aut-500' },
+                items: [
+                    { id: 'aut-lab', label: 'Práctica de laboratorio online (10 %)', s: '2027-05-01', e: '2027-05-10', milestone: true, approx: 'principios de mayo · fecha exacta en el curso virtual' },
+                    { id: 'aut-ex1', label: 'Examen (1ª semana, 16:00)', s: '2027-05-24', e: '2027-05-24', milestone: true },
+                    { id: 'aut-ex2', label: 'Examen (2ª semana, 09:00)', s: '2027-06-07', e: '2027-06-07', milestone: true }
+                ]
+            }
+        ];
+
+        function togglePlan(id) {
+            if (planDone[id]) delete planDone[id]; else planDone[id] = true;
+            try { localStorage.setItem(PLAN_KEY, JSON.stringify(planDone)); } catch (e) { /* sin almacenamiento */ }
+            renderHoy();
+            renderCardPlans();
+        }
+
+        // --- Pestaña "Hoy": qué toca hoy según el plan de cada asignatura ---
+        function fmtDay(key) {
+            const w = parseKey(key).toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+            return `${w} ${fmtShort(key)}`;
+        }
+        function daysTo(key, from) { return Math.round((parseKey(key) - parseKey(from)) / 86400000); }
+        function inDays(n) { return n === 0 ? 'hoy' : (n === 1 ? 'mañana' : `en ${n} días`); }
+
+        function renderHoy() {
+            const box = document.getElementById('hoy-content');
+            if (!box) return;
+            const today = keyOf(new Date());
+            const dEl = document.getElementById('hoy-date');
+            if (dEl) {
+                const t = parseKey(today).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                dEl.innerText = t.charAt(0).toUpperCase() + t.slice(1);
+            }
+            const subjOf = { alg: 'algebra', prg: 'prog', ia: 'ia', aut: 'aut' };
+
+            const section = (title, html) => `<div><h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">${title}</h4>${html}</div>`;
+
+            const cardOf = sub => {
+                const key = subjOf[sub.id];
+                const items = sub.items.slice().sort((a, b) => a.s.localeCompare(b.s) || a.e.localeCompare(b.e));
+                const active = items.filter(i => !i.approx && i.s <= today && today <= i.e);
+                const overdue = items.filter(i => !i.approx && i.e < today && !planDone[i.id]).slice(0, 3);
+                const next = items.find(i => !planDone[i.id] && i.s > today);
+
+                const row = (i, note) => {
+                    const isDone = !!planDone[i.id];
+                    return `<div class="flex items-center gap-3 p-2.5 rounded-lg border border-slate-100 bg-white ${isDone ? 'opacity-60' : ''}">
+                        <button onclick="togglePlan('${i.id}')" aria-label="Marcar como completado"
+                            class="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${isDone ? sub.t.check : 'border-slate-300 hover:border-slate-400'}">
+                            ${isDone ? '<i class="fa-solid fa-check text-white text-[10px]"></i>' : ''}
+                        </button>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-semibold ${isDone ? 'line-through text-slate-500' : 'text-slate-800'}">${i.milestone ? '<i class="fa-solid fa-flag ' + sub.t.iconc + ' mr-1 text-xs"></i>' : ''}${i.label}</p>
+                            <p class="text-xs text-slate-500">${note}</p>
+                        </div>
+                    </div>`;
+                };
+
+                // 1) Plan
+                let planHtml = '';
+                if (active.length) {
+                    planHtml = '<div class="space-y-2">' + active.map(i => {
+                        const left = daysTo(i.e, today);
+                        const range = i.s === i.e ? 'Hoy' : `${fmtShort(i.s)} – ${fmtShort(i.e)} · termina ${inDays(left)}`;
+                        return row(i, range);
+                    }).join('') + '</div>';
+                } else {
+                    planHtml = '<p class="text-sm text-slate-500">Hoy no hay ningún tramo del plan en curso.</p>';
+                    if (next) {
+                        const when = next.approx ? next.approx : `${fmtDay(next.s)} (${inDays(daysTo(next.s, today))})`;
+                        planHtml += `<p class="text-sm text-slate-700 mt-1">Siguiente: <b>${next.label}</b> · ${when}</p>`;
+                    }
+                }
+                if (overdue.length) {
+                    planHtml += `<div class="mt-3 space-y-2"><p class="text-xs font-semibold text-amber-600">Pendiente de antes</p>` +
+                        overdue.map(i => row(i, `${fmtShort(i.s)} – ${fmtShort(i.e)}`)).join('') + '</div>';
+                }
+
+                planHtml += doneBlock(sub, key, items.filter(i => planDone[i.id] && !active.includes(i)));
+
+                // 2) Tutoría
+                let tutHtml = '';
+                const tut = tutorias.find(t => t.subject === key);
+                if (tut) {
+                    if (tut.dates.includes(today)) {
+                        tutHtml = section('Tutoría', `<p class="text-sm font-semibold text-slate-800"><i class="fa-solid fa-chalkboard-user mr-1" style="color:${tut.color}"></i>Hoy · ${tut.full.replace('Tutoría ', '')}</p>`);
+                    } else {
+                        const nxt = tut.dates.find(d => d > today);
+                        if (nxt) tutHtml = section('Tutoría', `<p class="text-sm text-slate-700"><i class="fa-solid fa-chalkboard-user mr-1" style="color:${tut.color}"></i>Próxima: <b>${fmtDay(nxt)}</b> · 17:15 (${inDays(daysTo(nxt, today))})</p>`);
+                    }
+                }
+
+                // 3) Próximos hitos (exámenes y entregas), sin repetir títulos
+                const seen = new Set();
+                const marks = events
+                    .filter(e => e.subject === key && (e.type === 'exam' || e.type === 'pec') && e.date >= today)
+                    .sort((a, b) => a.date.localeCompare(b.date))
+                    .filter(e => !seen.has(e.title) && seen.add(e.title))
+                    .slice(0, 3);
+                const marksHtml = marks.length ? section('Próximos hitos', '<div class="space-y-1">' + marks.map(e => {
+                    const n = daysTo(e.date, today);
+                    return `<p class="text-sm text-slate-700"><b class="${n === 0 ? 'text-rose-600' : ''}">${n === 0 ? 'HOY' : fmtDay(e.date)}</b> · ${e.title} <span class="text-xs text-slate-400">(${inDays(n)})</span></p>`;
+                }).join('') + '</div>') : '';
+
+                // 4) Notas de hoy
+                const todays = notes.filter(n => n.subject === key && n.date === today);
+                const notesHtml = todays.length ? section('Notas de hoy', '<div class="space-y-1">' + todays.map(n => `<p class="text-sm text-slate-700"><i class="fa-solid fa-pen text-slate-400 mr-1 text-xs"></i>${esc(n.title)}</p>`).join('') + '</div>') : '';
+
+                return `<div class="bg-white border-l-4 ${sub.t.card} rounded-2xl shadow-sm overflow-hidden">
+                    <div class="p-4 ${sub.t.head} border-b flex justify-between items-start">
+                        <h3 class="text-base font-bold ${sub.t.title} pr-3">${sub.title}</h3>
+                        <div class="bg-white p-2 rounded-lg shadow-sm"><i class="fa-solid ${sub.icon} ${sub.t.iconc}"></i></div>
+                    </div>
+                    <div class="p-4 space-y-4">
+                        ${section('Toca hoy', planHtml)}
+                        ${tutHtml}
+                        ${marksHtml}
+                        ${notesHtml}
+                    </div>
+                </div>`;
+            };
+
+            const byId = id => planData.find(x => x.id === id);
+            const row2 = (a, b) => `<div class="grid gap-6 lg:grid-cols-2 items-start">${cardOf(byId(a))}${cardOf(byId(b))}</div>`;
+            const head = t => `<h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">${t}</h3>`;
+            const general = notes.filter(n => n.subject === 'general' && n.date === today);
+            const generalHtml = general.length ? `<div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 space-y-1">
+                <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Notas generales de hoy</h4>
+                ${general.map(n => `<p class="text-sm text-slate-700"><i class="fa-solid fa-pen text-slate-400 mr-1 text-xs"></i>${esc(n.title)}</p>`).join('')}
+            </div>` : '';
+            box.innerHTML = generalHtml + head('1º semestre') + row2('alg', 'prg') + head('2º semestre') + row2('aut', 'ia');
+        }
+
+        function esc(str) {
+            return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
+        function addNote() {
+            const input = document.getElementById('note-text');
+            const text = input.value.trim();
+            if (!text) { input.focus(); return; }
+            notes.push({
+                id: 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                date: selectedKey,
+                title: text,
+                type: 'note',
+                subject: document.getElementById('note-subject').value
+            });
+            saveNotes();
+            renderCalendar();
+        }
+
+        function deleteNote(id) {
+            notes = notes.filter(n => n.id !== id);
+            saveNotes();
+            renderCalendar();
+        }
+
+        function saveRecording(rk, inputId) {
+            const input = document.getElementById(inputId);
+            let url = input ? input.value.trim() : '';
+            if (!url) { if (input) input.focus(); return; }
+            if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+            try { new URL(url); } catch (e) {
+                showModal('Enlace no válido', 'Revisa que el enlace esté completo y vuelve a pegarlo.');
+                return;
+            }
+            recLinks[rk] = url;
+            saveRecLinks();
+            renderCalendar();
+        }
+
+        function removeRecording(rk) {
+            delete recLinks[rk];
+            saveRecLinks();
+            renderCalendar();
+        }
+
+        function fmtShort(key) {
+            const d = parseKey(key);
+            return `${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3).toLowerCase()}`;
+        }
+
+        function renderAgenda() {
+            const agenda = document.getElementById('agenda-list');
+            document.getElementById('agenda-title').innerText = `Agenda de ${MONTHS[viewMonth]}`;
+            const prefix = `${viewYear}-${pad(viewMonth + 1)}`;
+            const monthAbbr = MONTHS[viewMonth].slice(0, 3);
+
+            const tut = [];
+            tutorias.forEach(t => t.dates.forEach(d => {
+                if (d.startsWith(prefix)) tut.push({ date: d, title: t.full, type: 'tutoria', subject: t.subject });
+            }));
+            const list = events.concat(notes, tut).filter(e => e.date.startsWith(prefix)).sort((a, b) => a.date.localeCompare(b.date));
+            if (list.length === 0) {
+                agenda.innerHTML = '<p class="text-sm text-slate-400">No hay eventos planificados este mes.</p>';
+                return;
+            }
+
+            agenda.innerHTML = '';
+            list.forEach(e => {
+                const day = parseInt(e.date.slice(8), 10);
+                const isPast = e.date < todayKey;
+                let bgClass, borderClass, iconClass, icon;
+                
+                const TONE = {
+                    algebra: { bg: 'bg-algebra-50', b: 'border-algebra-100', i: 'text-algebra-500' },
+                    prog:    { bg: 'bg-prog-50',    b: 'border-prog-200',    i: 'text-prog-500' },
+                    ia:      { bg: 'bg-ia-50',      b: 'border-ia-200',      i: 'text-ia-500' },
+                    aut:     { bg: 'bg-aut-50',     b: 'border-aut-200',     i: 'text-aut-500' }
+                };
+                const tone = TONE[e.subject];
+                if (tone) {
+                    bgClass = isPast ? 'bg-slate-50' : tone.bg;
+                    borderClass = isPast ? 'border-slate-200' : tone.b;
+                    iconClass = isPast ? 'text-slate-400' : tone.i;
+                } else {
+                    bgClass = 'bg-slate-50';
+                    borderClass = 'border-slate-200';
+                    iconClass = 'text-slate-500';
+                }
+
+                if (e.type === 'pec') icon = 'fa-file-signature';
+                else if (e.type === 'study') icon = 'fa-book-open';
+                else if (e.type === 'note') icon = 'fa-pen';
+                else if (e.type === 'exam') icon = 'fa-pen-to-square';
+                else if (e.type === 'tutoria') icon = 'fa-chalkboard-user';
+                else icon = 'fa-calendar-check';
+
+                let opacityClass = isPast ? 'opacity-60' : '';
+
+                agenda.innerHTML += `
+                    <div class="flex items-center p-4 rounded-xl border cursor-pointer ${bgClass} ${borderClass} ${opacityClass}" onclick="selectDay('${e.date}')">
+                        <div class="w-12 text-center flex-shrink-0 border-r border-slate-200 pr-3 mr-3">
+                            <span class="block text-xs uppercase font-bold text-slate-400">${monthAbbr}</span>
+                            <span class="block text-xl font-black ${isPast ? 'text-slate-500' : 'text-slate-800'}">${day}</span>
+                        </div>
+                        <div class="flex-1">
+                            <h4 class="font-bold text-sm break-words ${isPast ? 'text-slate-500 line-through' : 'text-slate-800'}">${esc(e.title)}</h4>
+                            <p class="text-xs ${iconClass} mt-1 font-medium capitalize">
+                                <i class="fa-solid ${icon} mr-1"></i> ${e.type === 'tutoria' ? 'Tutoría' : e.type === 'exam' ? 'Examen' : e.type === 'note' ? 'Nota' : (e.type === 'pec' ? 'Entrega Evaluada' : (e.type === 'study' ? 'Bloque de Estudio' : 'Evento'))}
+                            </p>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // --- Cuentas atrás de exámenes ---
+        const exams = [
+            { name: 'Álgebra', sem: 1, icon: 'fa-square-root-variable',
+              c: { card: 'border-algebra-500 bg-algebra-50', title: 'text-algebra-800', sub: 'text-algebra-600', num: 'text-algebra-800', ic: 'text-algebra-500' },
+              first:  { when: new Date(2027, 0, 27, 16, 0), tag: '1ª semana · tarde' },
+              second: { when: new Date(2027, 1, 10, 9, 0),  tag: '2ª semana · mañana' } },
+            { name: 'Programación', sem: 1, icon: 'fa-code',
+              c: { card: 'border-prog-500 bg-prog-50', title: 'text-prog-800', sub: 'text-prog-600', num: 'text-prog-800', ic: 'text-prog-500' },
+              first:  { when: new Date(2027, 0, 26, 16, 0), tag: '1ª semana · tarde' },
+              second: { when: new Date(2027, 1, 9, 9, 0),   tag: '2ª semana · mañana' } },
+            { name: 'Intro. IA', sem: 2, draft: true, icon: 'fa-brain',
+              c: { card: 'border-ia-500 bg-ia-50', title: 'text-ia-800', sub: 'text-ia-600', num: 'text-ia-800', ic: 'text-ia-500' },
+              first:  { when: new Date(2027, 4, 26, 16, 0), tag: '1ª semana · tarde' },
+              second: { when: new Date(2027, 5, 9, 9, 0),   tag: '2ª semana · mañana' } },
+            { name: 'Autómatas', sem: 2, draft: true, icon: 'fa-diagram-project',
+              c: { card: 'border-aut-500 bg-aut-50', title: 'text-aut-800', sub: 'text-aut-600', num: 'text-aut-800', ic: 'text-aut-500' },
+              first:  { when: new Date(2027, 4, 24, 16, 0), tag: '1ª semana · tarde' },
+              second: { when: new Date(2027, 5, 7, 9, 0),   tag: '2ª semana · mañana' } }
+        ];
+
+        function remaining(when) {
+            const ms = when - new Date();
+            if (ms <= 0) return null;
+            return {
+                d: Math.floor(ms / 86400000),
+                h: Math.floor(ms % 86400000 / 3600000),
+                m: Math.floor(ms % 3600000 / 60000)
+            };
+        }
+
+        function fmtExam(when) {
+            let t = when.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+            t = t.charAt(0).toUpperCase() + t.slice(1);
+            return `${t} · ${pad(when.getHours())}:${pad(when.getMinutes())}`;
+        }
+
+        function renderCountdowns() {
+            const box = document.getElementById('countdowns');
+            if (!box) return;
+            box.innerHTML = exams.map(ex => {
+                const r1 = remaining(ex.first.when);
+                const r2 = remaining(ex.second.when);
+                const main = r1
+                    ? `<p><span class="text-2xl font-black ${ex.c.num} leading-none">${r1.d}</span><span class="text-[10px] font-semibold ${ex.c.sub} ml-0.5">${r1.d === 1 ? 'día' : 'días'}</span></p>
+                       <p class="text-[10px] ${ex.c.sub}">${r1.h} h ${r1.m} min</p>`
+                    : `<p class="text-base font-black text-slate-500">Hecho</p>`;
+                const alt = r2
+                    ? `<p class="text-sm font-bold ${ex.c.num}">${r2.d} ${r2.d === 1 ? 'día' : 'días'} ${r2.h} h</p>`
+                    : `<p class="text-sm font-bold text-slate-500">Hecho</p>`;
+                return `
+                <div class="border-l-4 ${ex.c.card} rounded-xl shadow-sm p-3">
+                    <p class="text-xs font-bold ${ex.c.title} mb-2"><i class="fa-solid ${ex.icon} ${ex.c.ic} mr-1"></i>${ex.name} <span class="text-[10px] font-semibold ${ex.c.sub}">· ${ex.sem}º sem.${ex.draft ? ' · provisional' : ''}</span></p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            ${main}
+                            <p class="text-[10px] text-slate-500 mt-1">${ex.first.tag}</p>
+                            <p class="text-[10px] text-slate-500">${fmtExam(ex.first.when)}</p>
+                        </div>
+                        <div class="border-l border-slate-200/70 pl-3">
+                            <p class="text-[10px] font-semibold ${ex.c.sub}"><i class="fa-regular fa-sun mr-1"></i>${ex.second.tag}</p>
+                            ${alt}
+                            <p class="text-[10px] text-slate-500">${fmtExam(ex.second.when)}</p>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function toggleDeadline(id) {
+            if (deadDone[id]) delete deadDone[id]; else deadDone[id] = true;
+            try { localStorage.setItem(DEAD_KEY, JSON.stringify(deadDone)); } catch (e) { /* sin almacenamiento */ }
+            renderDeadlines();
+        }
+
+        function renderDeadlines() {
+            const box = document.getElementById('deadlines');
+            if (!box) return;
+            const today = parseKey(keyOf(new Date()));
+            const names = { algebra: 'Álgebra', prog: 'Programación' };
+            const all = deadlines
+                .map(d => ({ ...d, id: d.subject + '|' + d.date, days: Math.round((parseKey(d.date) - today) / 86400000) }))
+                .map(d => ({ ...d, done: !!deadDone[d.id] }))
+                .filter(d => d.days >= 0 || !d.done)   // las pasadas sin marcar siguen visibles
+                .sort((a, b) => a.days - b.days);
+            // Las 4 próximas pendientes, más las ya marcadas que caigan antes (para poder desmarcarlas)
+            const pending = all.filter(d => !d.done).slice(0, 4);
+            const cutoff = pending.length ? pending[pending.length - 1].days : Infinity;
+            const shown = all.filter(d => !d.done ? pending.includes(d) : d.days <= cutoff);
+            if (shown.length === 0) { box.innerHTML = ''; return; }
+            const rows = shown.map(d => {
+                const st = SUBJECT_STYLE[d.subject] || SUBJECT_STYLE.general;
+                let right;
+                if (d.done) right = '<span class="text-[10px] font-bold text-emerald-600">Hecha</span>';
+                else if (d.days < 0) right = '<span class="text-[10px] font-bold text-rose-500">Pasada</span>';
+                else right = `<span class="text-base font-black text-slate-800">${d.days === 0 ? 'Hoy' : d.days}</span><span class="text-[10px] text-slate-500">${d.days === 0 ? '' : (d.days === 1 ? ' día' : ' días')}</span>`;
+                return `<div class="flex items-center gap-2 ${d.done ? 'opacity-50' : ''}">
+                    <button onclick="toggleDeadline('${d.id}')" aria-label="Marcar como hecha"
+                        class="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${d.done ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 hover:border-slate-400'}">
+                        ${d.done ? '<i class="fa-solid fa-check text-white text-[10px]"></i>' : ''}
+                    </button>
+                    <span class="w-1 self-stretch rounded" style="background:${st.fg}"></span>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-xs font-semibold text-slate-800 truncate ${d.done ? 'line-through' : ''}">${d.label}</p>
+                        <p class="text-[10px] text-slate-500">${names[d.subject]} · ${fmtShort(d.date)}</p>
+                    </div>
+                    <div class="text-right">${right}</div>
+                </div>`;
+            }).join('');
+            box.innerHTML = `<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 space-y-2">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400"><i class="fa-solid fa-flag mr-1"></i>Próximas entregas</h3>
+                ${rows}
+                <p class="text-[10px] leading-snug text-slate-400 pt-2 border-t border-slate-100">Por confirmar: PEC de Intro. IA (primeros de abril), actividad de Prolog (primeros de mayo) y práctica de Autómatas (principios de mayo).</p>
+            </div>`;
+        }
+
+        renderCountdowns();
+        renderDeadlines();
+        setInterval(() => { renderCountdowns(); renderDeadlines(); }, 30000);
+
+
+        // --- Simulacros: copiar prompt para el cuaderno de Gemini ---
+        function buildSimulacroPrompt(key) {
+            const input = document.getElementById('temas-' + key);
+            const temas = (input && input.value.trim()) || 'todos los temas';
+            if (key === 'algebra') {
+                return `Usando solo mis fuentes, hazme un simulacro de examen de Fundamentos Algebraicos para la IA con 4 preguntas de desarrollo, con el mismo estilo y dificultad que los exámenes antiguos que he subido, para resolver en 120 minutos. Temas: ${temas}. No pongas las soluciones todavía; te las pediré después.`;
+            }
+            if (key === 'ia') {
+                return `Usando solo mis fuentes, hazme un simulacro de examen de Introducción a la Inteligencia Artificial con 30 preguntas tipo test, con el mismo formato (número de opciones por pregunta) y dificultad que los exámenes antiguos que he subido. En la UNED cada acierto suma 10/n y cada error resta 5/n. Temas: ${temas}. No pongas las soluciones todavía; te las pediré después.`;
+            }
+            if (key === 'aut') {
+                return `Usando solo mis fuentes, hazme un simulacro de examen de Fundamentos de Autómatas, Gramáticas y Lenguajes con 10 preguntas tipo test, con el mismo formato y dificultad que los exámenes antiguos que he subido (en la UNED los errores restan). Temas: ${temas}. No pongas las soluciones todavía; te las pediré después.`;
+            }
+            return `Usando solo mis fuentes, hazme un simulacro de examen de Fundamentos de Programación con el mismo formato y dificultad que los exámenes antiguos que he subido: 10 preguntas test de 4 opciones (en la UNED los errores restan) y 1 ejercicio de programación, para resolver en 120 minutos. Temas: ${temas}. No pongas las soluciones todavía; te las pediré después.`;
+        }
+
+        async function copySimulacro(key) {
+            const text = buildSimulacroPrompt(key);
+            const name = ({ algebra: 'Álgebra', prog: 'Programación', ia: 'Introducción a la IA', aut: 'Autómatas' })[key];
+            let ok = false;
+            try {
+                await navigator.clipboard.writeText(text);
+                ok = true;
+            } catch (e) {
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    ok = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                } catch (e2) { ok = false; }
+            }
+            if (ok) {
+                showModal(`Prompt copiado: ${name}`, 'Ya está en el portapapeles. Abre el cuaderno de Gemini con el botón "Abrir cuaderno" y pégalo en el chat.', key);
+            } else {
+                showModal(`Prompt de ${name}`, text, key);
+            }
+        }
+
+        // --- Plan de trabajo dentro de cada tarjeta de asignatura ---
+        const CARD_PLAN = { algebra: 'alg', prog: 'prg', ia: 'ia', aut: 'aut' };
+        const showDone = {};   // qué asignaturas tienen desplegada la lista de completados
+
+        function savePlan() {
+            try { localStorage.setItem(PLAN_KEY, JSON.stringify(planDone)); } catch (e) { /* sin almacenamiento */ }
+        }
+
+        function toggleShowDone(key) {
+            showDone[key] = !showDone[key];
+            renderCardPlans();
+            renderHoy();
+        }
+
+        function resetPlan(subId) {
+            const sub = planData.find(x => x.id === subId);
+            if (sub) sub.items.forEach(i => { delete planDone[i.id]; });
+            savePlan();
+            renderCardPlans();
+            renderHoy();
+        }
+
+        // Lista desplegable de lo ya completado, para poder desmarcarlo
+        function doneBlock(sub, key, list) {
+            if (!list.length) return '';
+            const open = !!showDone[key];
+            let html = `<div class="mt-3"><button onclick="toggleShowDone('${key}')" class="text-xs font-bold text-slate-500 hover:text-slate-700"><i class="fa-solid fa-chevron-${open ? 'up' : 'down'} mr-1"></i>Completados (${list.length})</button>`;
+            if (open) {
+                html += '<div class="mt-2 space-y-2">' + list.map(i => `
+                    <div class="flex items-center gap-3 p-2 rounded-lg border border-slate-100 bg-white opacity-70">
+                        <button onclick="togglePlan('${i.id}')" title="Desmarcar" aria-label="Desmarcar"
+                            class="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${sub.t.check}"><i class="fa-solid fa-check text-white text-[10px]"></i></button>
+                        <p class="flex-1 text-sm line-through text-slate-500">${i.label}</p>
+                    </div>`).join('') +
+                    `<button onclick="resetPlan('${sub.id}')" class="text-xs font-semibold text-slate-500 underline hover:text-slate-700">Desmarcar todos</button></div>`;
+            }
+            return html + '</div>';
+        }
+
+        function renderCardPlans() {
+            Object.keys(CARD_PLAN).forEach(key => {
+                const box = document.getElementById('cardplan-' + key);
+                const sub = planData.find(x => x.id === CARD_PLAN[key]);
+                if (!box || !sub) return;
+                const items = sub.items.slice().sort((a, b) => a.s.localeCompare(b.s) || a.e.localeCompare(b.e));
+                const done = items.filter(i => planDone[i.id]).length;
+                const pct = Math.round(done / items.length * 100);
+                const pending = items.filter(i => !planDone[i.id]).slice(0, 4);
+
+                const rows = pending.map(i => {
+                    const isCur = !i.approx && todayKey >= i.s && todayKey <= i.e;
+                    const range = i.approx ? i.approx : (i.s === i.e ? fmtShort(i.s) : `${fmtShort(i.s)} – ${fmtShort(i.e)}`);
+                    return `<div class="flex items-center gap-3 p-2.5 rounded-lg border bg-white ${isCur ? sub.t.cur + ' border-2' : 'border-slate-100'}">
+                        <button onclick="togglePlan('${i.id}')" aria-label="Marcar como completado"
+                            class="w-5 h-5 rounded border-2 border-slate-300 hover:border-slate-400 flex-shrink-0 transition-colors"></button>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-semibold text-slate-800">${i.milestone ? '<i class="fa-solid fa-flag ' + sub.t.iconc + ' mr-1 text-xs"></i>' : ''}${i.label}</p>
+                            <p class="text-xs text-slate-500">${range}</p>
+                        </div>
+                        ${isCur ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${sub.t.badge}">Ahora</span>` : ''}
+                    </div>`;
+                }).join('');
+
+                const doneHtml = doneBlock(sub, key, items.filter(i => planDone[i.id]));
+                box.innerHTML = `
+                    <h4 class="text-sm font-bold text-slate-700 mb-2"><i class="fa-solid fa-list-check ${sub.t.iconc}"></i> Plan de trabajo <span class="text-xs font-normal text-slate-400">· ${done} de ${items.length} · ${pct}%</span></h4>
+                    <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden mb-3"><div class="h-full ${sub.t.bar} transition-all" style="width:${pct}%"></div></div>
+                    <div class="space-y-2">${rows || '<p class="text-sm text-slate-500">¡Todo completado!</p>'}</div>${doneHtml}`;
+            });
+        }
+
+        renderCardPlans();
+
+        // --- Registro del service worker (uso sin conexión) ---
+        if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW no registrado:', err));
+            });
+        }
+    </script>
+</body>
+</html>
